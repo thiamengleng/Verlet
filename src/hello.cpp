@@ -3,6 +3,9 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <string>
+#include <memory>
+#include <vector>
+#include <chrono>
 
 #define MAX_SLICES 24
 /* We will use this renderer to draw into this window every frame. */
@@ -10,10 +13,25 @@ static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 
 struct VerletObject {
+    float radius;
     SDL_FPoint position;
     SDL_FPoint previousPosition;
     SDL_FPoint acceleration;
+    void SimulateGravity(float dt);
+    void CalculatePosition(float dt);
+    void Simulate(float dt);
+    VerletObject(float x, float y, float r) : radius(r) {
+        position.x = x;
+        position.y = y;
+        previousPosition.x = x;
+        previousPosition.y = y;
+    };
 } typedef VerletObject;
+
+struct VerletObjects {
+    std::vector<std::shared_ptr<VerletObject>> objects;
+
+} typedef VerletObjects;
 
 void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius);
 int roundUpToMultipleOfEight(int v);
@@ -44,15 +62,19 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     }
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
-double xpos = -200;
 /* This function runs once per frame, and is the heart of the program. */
+
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
+    static uint64_t currentTicks, frameTime;
+    static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(300, 100, static_cast<float>(150));
 	SDL_FRect rect;
 	float red = 0.2, green = 0.3, blue=0.6;
 	rect.x = rect.y = 100;
 	rect.h = 400;
 	rect.w = 400;
+    
+    aa->Simulate(frameTime/1000.0f);
 
 	SDL_SetRenderDrawColor(renderer, 33, 33, 33, SDL_ALPHA_OPAQUE);  /* dark gray, full alpha */
     SDL_RenderClear(renderer);
@@ -61,16 +83,18 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	SDL_RenderFillRect(renderer, &rect);
 	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
-    SDL_RenderDebugText(renderer, 200, 200, std::to_string(xpos).c_str());
-    DrawCircle(renderer, SDL_FPoint({400, float(xpos)}), 150);
-    
-    xpos += 0.04;
+    SDL_RenderDebugText(renderer, 200, 200, std::to_string(aa->position.y).c_str());
+    SDL_RenderDebugText(renderer, 200, 300, std::to_string(frameTime).c_str());
+    DrawCircle(renderer, aa->position, aa->radius);
     /* clear the window to the draw color. */
     
 
     /* put the newly-cleared rendering on the screen. */
+    frameTime = SDL_GetTicks() - currentTicks;
+    currentTicks = SDL_GetTicks();
+    
     SDL_RenderPresent(renderer);
-
+    SDL_Delay(2);
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
@@ -81,6 +105,29 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 }
 int roundUpToMultipleOfEight(int v) {
     return (v + (8 - 1)) & -8;
+}
+
+void VerletObject::CalculatePosition(float dt) {
+    SDL_FPoint newCurrent;
+    newCurrent.x = 2 * position.x - previousPosition.x + acceleration.x * dt * dt;
+    newCurrent.y = 2 * position.y - previousPosition.y + acceleration.y * dt * dt;
+    
+    previousPosition.y = position.y;
+    previousPosition.x = position.x;
+    position.x = newCurrent.x;
+    position.y = newCurrent.y;
+    acceleration = (SDL_FPoint){0, 0};
+    return;
+}
+
+void VerletObject::SimulateGravity(float dt) {
+    acceleration.x += 0;
+    acceleration.y += 400.0f * dt;
+}
+
+void VerletObject::Simulate(float dt) {
+    SimulateGravity(dt);
+    CalculatePosition(dt);
 }
 
 void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
