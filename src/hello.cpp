@@ -142,14 +142,11 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	SDL_RenderFillRect(renderer, &rect);
 	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
-    SDL_RenderDebugText(renderer, 200, 300, std::to_string(frameTime).c_str());
-    SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
+    //SDL_RenderDebugText(renderer, 200, 300, std::to_string(frameTime).c_str());
+    //SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
     Objs->DrawObjects(renderer);
     //DrawCircle(renderer, aa->position, aa->radius);
     DrawCircle(renderer, {1000,500}, 500);
-    //DrawCircle(render);
-    /* clear the window to the draw color. */
-    
 
     /* put the newly-cleared rendering on the screen. */
     frameTime = SDL_GetTicks() - currentTicks;
@@ -174,8 +171,8 @@ void AddObjects(float speed) {
     std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000, 250, 15); //Middle Top of the constaint
     obj->acceleration.x = std::cos(angle) * 2000;
     obj->acceleration.y = std::sin(angle) * 2000;
-    std::string debug = std::to_string(obj->acceleration.x) + " " + std::to_string(obj->acceleration.y) + " " + std::to_string(angle / M_PI * 180);
-    SDL_Log(debug.c_str());
+    //std::string debug = std::to_string(obj->acceleration.x) + " " + std::to_string(obj->acceleration.y) + " " + std::to_string(angle / M_PI * 180);
+    //SDL_Log(debug.c_str());
     
     obj->CalculatePosition(0.02);
     Objs->objects.push_back(obj);
