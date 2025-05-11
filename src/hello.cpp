@@ -46,6 +46,8 @@ bool step = false;
 
 
 void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius);
+void AddObjects(float speed);
+void chatgpt();
 int roundUpToMultipleOfEight(int v);
 
 /* This function runs once at startup. */
@@ -73,26 +75,36 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {   
     static std::mt19937 rng;
     static uint64_t last = 0;
-    std::uniform_int_distribution<int> ran(15, 20032);
-    std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * M_PI);
-    std::uniform_real_distribution<float> distRadius(0.0f, 1.0f);
+    static std::uniform_int_distribution<int> ran(15, 20032);
+    static std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * M_PI);
+    static std::uniform_real_distribution<float> distRadius(0.0f, 1.0f);
     if (event->type == SDL_EVENT_KEY_DOWN) {
         SDL_Keycode key = event->key.key;
-        if (key == SDLK_W && SDL_GetTicks()-last > 2) {
-            float radius = 400.0f;
+        switch(key) {
+            case SDLK_W:
+                if (SDL_GetTicks() - last > 2) {
+                    float radius = 400.0f;
 
-            float angle = distAngle(rng);
-            float r = radius * std::sqrt(distRadius(rng));
-            //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000 + r * std::cos(angle), SDL_clamp(ran(rng), 70, 200), SDL_clamp(ran(rng), 10, 20));
-            std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180, SDL_clamp(ran(rng), 2, 3));
-            obj->acceleration = {(float)SDL_clamp(ran(rng), 0, 250)-4200,(float)SDL_clamp(ran(rng), 1220, 1500)};
-            obj->CalculatePosition(0.02);
-            Objs->objects.push_back(obj);
-            last = SDL_GetTicks();
-        } else if (key == SDLK_SPACE) {
-            pause = !pause;
-        } else if (key == SDLK_S) {
-            step = true;
+                    float angle = distAngle(rng);
+                    float r = radius * std::sqrt(distRadius(rng));
+                    std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180, SDL_clamp(ran(rng), 10, 25));
+                    obj->acceleration = {(float)SDL_clamp(ran(rng), 0, 250)-4200,(float)SDL_clamp(ran(rng), 1220, 1500)};
+                    obj->CalculatePosition(0.02);
+                    Objs->objects.push_back(obj);
+
+                    last = SDL_GetTicks();
+                    break;
+                }
+            case SDLK_F:
+                if (SDL_GetTicks()-last > 50) {
+                    AddObjects(1.0f);
+                }
+            case SDLK_SPACE:
+                pause = !pause;
+                break;
+            case SDLK_S:
+                step = true;    
+                break;
         }
     }
 
@@ -130,7 +142,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	SDL_RenderFillRect(renderer, &rect);
 	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
-    SDL_RenderDebugText(renderer, 200, 200, std::to_string(aa->position.y).c_str());
     SDL_RenderDebugText(renderer, 200, 300, std::to_string(frameTime).c_str());
     SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
     Objs->DrawObjects(renderer);
@@ -155,6 +166,30 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 {
     /* SDL will clean up the window/renderer for us. */
 }
+
+void AddObjects(float speed) {
+    static float angle = 0;
+    static bool direction = false;
+
+    std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000, 250, 15); //Middle Top of the constaint
+    obj->acceleration.x = std::cos(angle) * 2000;
+    obj->acceleration.y = std::sin(angle) * 2000;
+    std::string debug = std::to_string(obj->acceleration.x) + " " + std::to_string(obj->acceleration.y) + " " + std::to_string(angle / M_PI * 180);
+    SDL_Log(debug.c_str());
+    
+    obj->CalculatePosition(0.02);
+    Objs->objects.push_back(obj);
+
+    if (!direction)
+        angle += 4.0f * (M_PI/180.0f);
+    else
+        angle -= 4.0f * (M_PI/180.0f);
+    if (angle > (M_PI))
+        direction = true; 
+    else if (angle < 0) 
+        direction = false;
+}
+
 int roundUpToMultipleOfEight(int v) {
     return (v + (8 - 1)) & -8;
 }
@@ -211,8 +246,8 @@ void VerletObjects::SolveCollisions() {
 }
 
 void VerletObjects::SimulateObjects(float dt) {
-    float subdt = dt / 4;
-    for (int i = 0; i < 4; i++) {
+    float subdt = dt / 8;
+    for (int i = 0; i < 8; i++) {
         for (auto& obj: objects) {
             obj->SimulateGravity(subdt);
             obj->ApplyConstraint({1000,500},500);
@@ -273,4 +308,3 @@ void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
     }
     SDL_RenderPoints( renderer, points, drawCount );
 }
-
