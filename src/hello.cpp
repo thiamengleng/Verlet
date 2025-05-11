@@ -11,6 +11,7 @@
 #include "Vec2Math.h"
 
 #define MAX_SLICES 24
+#define M_PI 3.14159265358979323846
 
 struct VerletObject {
     float radius;
@@ -19,7 +20,6 @@ struct VerletObject {
     SDL_FPoint acceleration;
     void SimulateGravity(float dt);
     void CalculatePosition(float dt);
-    void Simulate(float dt);
     void ApplyConstraint(SDL_FPoint center, float radius);
     
     VerletObject(float x, float y, float r) : radius(r) {
@@ -40,6 +40,8 @@ struct VerletObjects {
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static VerletObjects* Objs = new VerletObjects();
+bool pause = false;
+bool step = false;
 
 
 
@@ -50,7 +52,7 @@ int roundUpToMultipleOfEight(int v);
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("VerletIntegration", "1.0", "com.example.renderer-clear");
-    static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(280, 100, static_cast<float>(20));
+    static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(1000, 400, static_cast<float>(20));
     Objs->objects.push_back(aa);
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -58,7 +60,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         return SDL_APP_FAILURE;
     }
 
-    if (!SDL_CreateWindowAndRenderer("examples/renderer/clear", 1920, 1080, 0, &window, &renderer)) {
+    if (!SDL_CreateWindowAndRenderer("VerletIntegration", 1920, 1080, 0, &window, &renderer)) {
         SDL_Log("Couldn't create window/renderer: %s", SDL_GetError());
         return SDL_APP_FAILURE;
     }
@@ -69,16 +71,28 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 /* This function runs when a new event (mouse input, keypresses, etc) occurs. */
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {   
-    static std::mt19937 r(time(nullptr));
+    static std::mt19937 rng;
+    static uint64_t last = 0;
     std::uniform_int_distribution<int> ran(15, 20032);
+    std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * M_PI);
+    std::uniform_real_distribution<float> distRadius(0.0f, 1.0f);
     if (event->type == SDL_EVENT_KEY_DOWN) {
         SDL_Keycode key = event->key.key;
-        if (key == SDLK_W) {
-            
+        if (key == SDLK_W && SDL_GetTicks()-last > 2) {
+            float radius = 400.0f;
 
-            std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(SDL_clamp(ran(r), 100, 700), SDL_clamp(ran(r), 15, 600), SDL_clamp(ran(r), 25, 35));
-            obj->acceleration.x += static_cast<float>(SDL_clamp(ran(r), 40, 150));
+            float angle = distAngle(rng);
+            float r = radius * std::sqrt(distRadius(rng));
+            //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000 + r * std::cos(angle), SDL_clamp(ran(rng), 70, 200), SDL_clamp(ran(rng), 10, 20));
+            std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180, SDL_clamp(ran(rng), 2, 3));
+            obj->acceleration = {(float)SDL_clamp(ran(rng), 0, 250)-4200,(float)SDL_clamp(ran(rng), 1220, 1500)};
+            obj->CalculatePosition(0.02);
             Objs->objects.push_back(obj);
+            last = SDL_GetTicks();
+        } else if (key == SDLK_SPACE) {
+            pause = !pause;
+        } else if (key == SDLK_S) {
+            step = true;
         }
     }
 
@@ -96,25 +110,32 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     static std::shared_ptr<VerletObject> aa = Objs->objects[0];
 	SDL_FRect rect;
 	float red = 0.2, green = 0.3, blue=0.6;
-	rect.x = rect.y = 100;
-	rect.h = 400;
-	rect.w = 400;
+	rect.y = 0;
+    rect.x = 0;
+	rect.h = 1080;
+	rect.w = 1920;
     
-    Objs->SimulateObjects(frameTime/1000.0f);
+    if (!pause)
+        Objs->SimulateObjects(frameTime/1000.0f);
+    if (pause && step) {
+        Objs->SimulateObjects(frameTime/1000.0f);
+        step = false;
+    }
     //aa->Simulate(frameTime/1000.0f);
 
 	SDL_SetRenderDrawColor(renderer, 33, 33, 33, SDL_ALPHA_OPAQUE);  /* dark gray, full alpha */
     SDL_RenderClear(renderer);
 	
-    SDL_SetRenderDrawColorFloat(renderer, red, green, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
+    SDL_SetRenderDrawColorFloat(renderer, 0.2, 0.2, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
 	SDL_RenderFillRect(renderer, &rect);
 	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
     SDL_RenderDebugText(renderer, 200, 200, std::to_string(aa->position.y).c_str());
     SDL_RenderDebugText(renderer, 200, 300, std::to_string(frameTime).c_str());
+    SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
     Objs->DrawObjects(renderer);
     //DrawCircle(renderer, aa->position, aa->radius);
-    DrawCircle(renderer, {400,300}, 300);
+    DrawCircle(renderer, {1000,500}, 500);
     //DrawCircle(render);
     /* clear the window to the draw color. */
     
@@ -156,11 +177,6 @@ void VerletObject::SimulateGravity(float dt) {
     acceleration.y += 500.0f;
 }
 
-void VerletObject::Simulate(float dt) {
-    SimulateGravity(dt);
-    CalculatePosition(dt);
-}
-
 void VerletObject::ApplyConstraint(SDL_FPoint center, float cRadius) {
     SDL_FPoint delta = {position.x - center.x, position.y - center.y};
     float distance = magnitude(delta);
@@ -178,7 +194,7 @@ void VerletObjects::SolveCollisions() {
             SDL_FPoint delta = minus(first->position, second->position);
             float distance = magnitude(delta);
             if (distance < 0.01f) {
-                delta = {1.0f, 1.0f};  // or random small vector
+                delta = {1.0f, 1.0f};
                 distance = 0.01f;
             }
             if (distance < first->radius + second->radius) {
@@ -186,8 +202,8 @@ void VerletObjects::SolveCollisions() {
                 
                 float unresolved = first->radius + second->radius - distance;
                 SDL_FPoint addus = {static_cast<float>(0.5*unresolved*normal.x), static_cast<float>(0.5*unresolved*normal.y)};
-                second->position = add(second->position, addus);
-                first->position = minus(first->position, addus);
+                first->position = add(first->position, addus);
+                second->position = minus(second->position, addus);
             }
         }
     }
@@ -195,14 +211,15 @@ void VerletObjects::SolveCollisions() {
 }
 
 void VerletObjects::SimulateObjects(float dt) {
-    for (auto& obj: objects) {
-        obj->SimulateGravity(dt);
-        obj->ApplyConstraint({400,300},300);
-        obj->CalculatePosition(dt);
+    float subdt = dt / 4;
+    for (int i = 0; i < 4; i++) {
+        for (auto& obj: objects) {
+            obj->SimulateGravity(subdt);
+            obj->ApplyConstraint({1000,500},500);
+            obj->CalculatePosition(subdt);
+        }
+        SolveCollisions();
     }
-    SolveCollisions();
-
-
 }
 
 void VerletObjects::DrawObjects(SDL_Renderer* renderer) {
