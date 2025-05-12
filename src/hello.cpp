@@ -91,11 +91,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             case SDLK_W:
                 if (SDL_GetTicks() - last > 2) {
                     float radius = 400.0f;
-
-                    float angle = distAngle(rng);
                     float r = radius * std::sqrt(distRadius(rng));
-                    //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180, SDL_clamp(ran(rng), 10, 25));
-                    VerletObject* obj = new VerletObject(1200, 180, SDL_clamp(ran(rng), 10, 25));
+                    //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180,;
+                    VerletObject* obj = new VerletObject(1200, 180, SDL_clamp(ran(rng), 10, SDL_clamp(ran(rng)%19, 9, 15)));
                     obj->acceleration = {(float)SDL_clamp(ran(rng), 0, 250)-4200,(float)SDL_clamp(ran(rng), 1220, 1500)};
                     obj->CalculatePosition(0.02);
                     Objs->objects.push_back(obj);
@@ -142,7 +140,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
         Objs->SimulateObjects(frameTime/1000.0f);
         step = false;
     }
-    //aa->Simulate(frameTime/1000.0f);
 
 	SDL_SetRenderDrawColor(renderer, 33, 33, 33, SDL_ALPHA_OPAQUE);  /* dark gray, full alpha */
     SDL_RenderClear(renderer);
@@ -151,16 +148,14 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	SDL_RenderFillRect(renderer, &rect);
 	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
-    //SDL_RenderDebugText(renderer, 200, 300, std::to_string(frameTime).c_str());
+    SDL_RenderDebugText(renderer, 200, 300, (std::to_string(frameTime)+ " " + std::to_string(Objs->objects.size())).c_str());
     //SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
     Objs->DrawObjects(renderer);
-    //DrawCircle(renderer, aa->position, aa->radius);
     DrawCircle(renderer, {1000,500}, 500);
 
     /* put the newly-cleared rendering on the screen. */
     frameTime = SDL_GetTicks() - currentTicks;
     currentTicks = SDL_GetTicks();
-    SDL_GetPerformanceCounter();
     
     SDL_RenderPresent(renderer);
     SDL_Delay(2);
@@ -177,12 +172,9 @@ void AddObjects(float speed) {
     static float angle = 0;
     static bool direction = false;
 
-    //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000, 250, 15); //Middle Top of the constaint
     VerletObject* obj = new VerletObject(1000,250,15);
     obj->acceleration.x = std::cos(angle) * 2000;
     obj->acceleration.y = std::sin(angle) * 2000;
-    //std::string debug = std::to_string(obj->acceleration.x) + " " + std::to_string(obj->acceleration.y) + " " + std::to_string(angle / M_PI * 180);
-    //SDL_Log(debug.c_str());
     
     obj->CalculatePosition(0.02);
     Objs->objects.push_back(obj);
@@ -229,8 +221,6 @@ void VerletObject::ApplyConstraint(SDL_FPoint center, float cRadius) {
 }
 
 void VerletObjects::SolveCollisions() {
-    static uint64_t last = 0;
-    static std::string debug;
     for (int i = 0; i < objects.size(); i++) {
         for (int j = i+1; j < objects.size(); j++) {
             //std::shared_ptr<VerletObject> first = objects[i], second = objects[j];
@@ -251,9 +241,6 @@ void VerletObjects::SolveCollisions() {
             }
         }
     }
-    debug = std::to_string(SDL_GetTicks() - last);
-    SDL_Log(debug.c_str());
-    last = SDL_GetTicks();
     return;
 }
 
