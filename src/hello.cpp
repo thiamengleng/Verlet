@@ -31,10 +31,15 @@ struct VerletObject {
 } typedef VerletObject;
 
 struct VerletObjects {
-    std::vector<std::shared_ptr<VerletObject>> objects;
+    std::vector<VerletObject*> objects;
     void SimulateObjects(float dt);
     void SolveCollisions();
     void DrawObjects(SDL_Renderer* renderer);
+    ~VerletObjects() {
+        for (VerletObject*& obj: objects) {
+            delete(obj);
+        }
+    }
 } typedef VerletObjects;
 
 static SDL_Window *window = NULL;
@@ -54,7 +59,8 @@ int roundUpToMultipleOfEight(int v);
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("VerletIntegration", "1.0", "com.example.renderer-clear");
-    static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(1000, 400, static_cast<float>(20));
+    //static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(1000, 400, static_cast<float>(20));
+    VerletObject* aa = new VerletObject(1000, 400, 20.0f);
     Objs->objects.push_back(aa);
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -78,6 +84,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     static std::uniform_int_distribution<int> ran(15, 20032);
     static std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * M_PI);
     static std::uniform_real_distribution<float> distRadius(0.0f, 1.0f);
+    //static std::string debug;
     if (event->type == SDL_EVENT_KEY_DOWN) {
         SDL_Keycode key = event->key.key;
         switch(key) {
@@ -87,18 +94,22 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
                     float angle = distAngle(rng);
                     float r = radius * std::sqrt(distRadius(rng));
-                    std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180, SDL_clamp(ran(rng), 10, 25));
+                    //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180, SDL_clamp(ran(rng), 10, 25));
+                    VerletObject* obj = new VerletObject(1200, 180, SDL_clamp(ran(rng), 10, 25));
                     obj->acceleration = {(float)SDL_clamp(ran(rng), 0, 250)-4200,(float)SDL_clamp(ran(rng), 1220, 1500)};
                     obj->CalculatePosition(0.02);
                     Objs->objects.push_back(obj);
 
+                    
                     last = SDL_GetTicks();
                     break;
                 }
             case SDLK_F:
                 if (SDL_GetTicks()-last > 50) {
                     AddObjects(1.0f);
+                    last = SDL_GetTicks();
                 }
+                break;
             case SDLK_SPACE:
                 pause = !pause;
                 break;
@@ -118,8 +129,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
     static uint64_t currentTicks, frameTime;
-    //static std::shared_ptr<VerletObjects> Objs = std::make_shared<VerletObjects>();
-    static std::shared_ptr<VerletObject> aa = Objs->objects[0];
 	SDL_FRect rect;
 	float red = 0.2, green = 0.3, blue=0.6;
 	rect.y = 0;
@@ -168,7 +177,8 @@ void AddObjects(float speed) {
     static float angle = 0;
     static bool direction = false;
 
-    std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000, 250, 15); //Middle Top of the constaint
+    //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1000, 250, 15); //Middle Top of the constaint
+    VerletObject* obj = new VerletObject(1000,250,15);
     obj->acceleration.x = std::cos(angle) * 2000;
     obj->acceleration.y = std::sin(angle) * 2000;
     //std::string debug = std::to_string(obj->acceleration.x) + " " + std::to_string(obj->acceleration.y) + " " + std::to_string(angle / M_PI * 180);
@@ -190,7 +200,6 @@ void AddObjects(float speed) {
 int roundUpToMultipleOfEight(int v) {
     return (v + (8 - 1)) & -8;
 }
-
 void VerletObject::CalculatePosition(float dt) {
     SDL_FPoint newCurrent;
     newCurrent.x = 2 * position.x - previousPosition.x + acceleration.x * dt * dt;
@@ -220,9 +229,12 @@ void VerletObject::ApplyConstraint(SDL_FPoint center, float cRadius) {
 }
 
 void VerletObjects::SolveCollisions() {
+    static uint64_t last = 0;
+    static std::string debug;
     for (int i = 0; i < objects.size(); i++) {
         for (int j = i+1; j < objects.size(); j++) {
-            std::shared_ptr<VerletObject> first = objects[i], second = objects[j];
+            //std::shared_ptr<VerletObject> first = objects[i], second = objects[j];
+            VerletObject *first = objects[i], *second = objects[j];
             SDL_FPoint delta = minus(first->position, second->position);
             float distance = magnitude(delta);
             if (distance < 0.01f) {
@@ -239,12 +251,15 @@ void VerletObjects::SolveCollisions() {
             }
         }
     }
+    debug = std::to_string(SDL_GetTicks() - last);
+    SDL_Log(debug.c_str());
+    last = SDL_GetTicks();
     return;
 }
 
 void VerletObjects::SimulateObjects(float dt) {
-    float subdt = dt / 8;
-    for (int i = 0; i < 8; i++) {
+    float subdt = dt / 6;
+    for (int i = 0; i < 6; i++) {
         for (auto& obj: objects) {
             obj->SimulateGravity(subdt);
             obj->ApplyConstraint({1000,500},500);
@@ -266,7 +281,7 @@ void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
     const int arrSize = roundUpToMultipleOfEight( radius * 8 * 35 / 49 );
     SDL_FPoint points[arrSize];
     int       drawCount = 0;
-
+    
     const int32_t diameter = (radius * 2);
 
     int32_t x = (radius - 1);
