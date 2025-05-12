@@ -1,13 +1,15 @@
 # Building the project
-Really bad project that uses O(n^2) collision detection and SDL3 to render everything.
-Handles about 500 objects with about 50FPS
----
+
 ```
 cmake -S . -B build
 ```
 ```
 cmake --build build
 ```
+---
+## Project Description
+Really bad project that uses O(n^2) collision detection and SDL3 to render everything.
+Handles about 500 objects with about 50FPS
 ---
 | Keybind   | Description       |
 | ------------- |:-------------:| 
