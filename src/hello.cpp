@@ -34,7 +34,6 @@ struct VerletObject {
 struct VerletObjects {
     std::vector<std::vector<std::vector<VerletObject*>>> grid;
     std::vector<VerletObject*> objects;
-    SDL_FPoint points[];
 
     void SimulateObjects(float dt);
     void SolveCollisions();
@@ -64,10 +63,8 @@ bool step = false;
 uint64_t frameTime;
 
 
-
-void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius);
 void AddObjects(float speed);
-void set_pixel(SDL_Surface *surface, int x, int y, Uint32 color);
+void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius);
 int roundUpToMultipleOfEight(int v);
 
 /* This function runs once at startup. */
@@ -225,7 +222,7 @@ void VerletObject::ApplyConstraint(SDL_FPoint center, float cRadius) {
 }
 
 int VerletObject::GetGrid() {
-    int row = position.y / 108 + 1, column = position.x / 192;
+    int row = SDL_clamp(position.y / 108 + 1, 1, 10), column = SDL_clamp(position.x / 192, 0, 10);
     
     return row*10 + column;
 }
@@ -259,11 +256,6 @@ void VerletObjects::SolveCollision(VerletObject* first, VerletObject* second) {
 
 void VerletObjects::SolveCollisions() {
     for (int i = 0; i < objects.size(); i++) {
-        /*
-        for (int j = i+1; j < objects.size(); j++) {
-            //SolveCollision(objects[i], objects[j]);
-        }
-            */
         ExploreAndSolve(objects[i]);
     }
     return;
@@ -299,10 +291,55 @@ void VerletObjects::SimulateObjects(float dt) {
 }
 
 void VerletObjects::DrawObjects(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE); //Yellow Color 
+    long long totalSize = 0;
     for (auto& obj: objects) {
-        DrawCircle(renderer, obj->position, static_cast<int>(obj->radius));
+        totalSize += roundUpToMultipleOfEight( obj->radius * 8 * 35 / 49 );
     }
+    SDL_FPoint points[totalSize];
+    int       drawCount = 0;
+    
+    for (auto& obj : objects) {
+        SDL_FPoint center = obj->position;
+        const int32_t diameter = (obj->radius * 2);
+
+        int32_t x = (obj->radius - 1);
+        int32_t y = 0;
+        int32_t tx = 1;
+        int32_t ty = 1;
+        int32_t error = (tx - diameter);
+        
+        while( x >= y )
+        {
+            // Each of the following renders an octant of the circle
+            points[drawCount+0] = { center.x + x, center.y - y };
+            points[drawCount+1] = { center.x + x, center.y + y };
+            points[drawCount+2] = { center.x - x, center.y - y };
+            points[drawCount+3] = { center.x - x, center.y + y };
+            points[drawCount+4] = { center.x + y, center.y - x };
+            points[drawCount+5] = { center.x + y, center.y + x };
+            points[drawCount+6] = { center.x - y, center.y - x };
+            points[drawCount+7] = { center.x - y, center.y + x };
+
+            drawCount += 8;
+
+            if( error <= 0 )
+            {
+                ++y;
+                error += ty;
+                ty += 2;
+            }
+
+            if( error > 0 )
+            {
+                --x;
+                tx += 2;
+                error += (tx - diameter);
+            }
+        }
+    }
+    //SDL_Log("Total Arr Size: %lli", totalSize);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE); //Yellow Color 
+    SDL_RenderPoints(renderer, points, drawCount);
 }
 
 void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
@@ -347,5 +384,5 @@ void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
             error += (tx - diameter);
         }
     }
-    SDL_RenderPoints( renderer, points, drawCount );
+    SDL_RenderPoints( renderer, points, drawCount);
 }
