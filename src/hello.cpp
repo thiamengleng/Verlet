@@ -18,6 +18,8 @@ struct VerletObject {
     SDL_FPoint position;
     SDL_FPoint previousPosition;
     SDL_FPoint acceleration;
+    Uint8 r, g, b;
+
     void SimulateGravity(float dt);
     void CalculatePosition(float dt);
     void ApplyConstraint(SDL_FPoint center, float radius);
@@ -57,6 +59,10 @@ struct VerletObjects {
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static VerletObjects* Objs = new VerletObjects();
+
+std::mt19937 rng;
+std::uniform_int_distribution<int> ran(0, 20000);
+
 bool pause = false;
 bool step = false;
 
@@ -64,7 +70,7 @@ uint64_t frameTime;
 
 
 void AddObjects(float speed);
-void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius);
+void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius, Uint8 r, Uint8 g, Uint8 b);
 int roundUpToMultipleOfEight(int v);
 
 /* This function runs once at startup. */
@@ -73,6 +79,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
     SDL_SetAppMetadata("VerletIntegration", "1.0", "com.example.renderer-clear");
     //static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(1000, 400, static_cast<float>(20));
     VerletObject* aa = new VerletObject(1000, 400, 20.0f);
+    aa->r = 255; aa->g = 255; aa->g = 255;
     Objs->objects.push_back(aa);
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -91,12 +98,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 /* This function runs when a new event (mouse input, keypresses, etc) occurs. */
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 {   
-    static std::mt19937 rng;
+    
     static uint64_t last = 0;
-    static std::uniform_int_distribution<int> ran(15, 20032);
+    
     static std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * M_PI);
     static std::uniform_real_distribution<float> distRadius(0.0f, 1.0f);
-    //static std::string debug;
+    
     if (event->type == SDL_EVENT_KEY_DOWN) {
         SDL_Keycode key = event->key.key;
         switch(key) {
@@ -127,12 +134,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
     static uint64_t currentTicks;
-	static SDL_FRect rect;
-	float red = 0.2, green = 0.3, blue=0.6;
-	rect.y = 0;
-    rect.x = 0;
-	rect.h = 1080;
-	rect.w = 1920;
     
     if (!pause)
         Objs->SimulateObjects(frameTime/1000.0f);
@@ -143,13 +144,9 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 	SDL_SetRenderDrawColor(renderer, 33, 33, 33, SDL_ALPHA_OPAQUE);  /* dark gray, full alpha */
     SDL_RenderClear(renderer);
-	
-    SDL_SetRenderDrawColorFloat(renderer, 0.2, 0.2, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
-	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
-    //SDL_RenderDebugText(renderer, 200, 300, (std::to_string(renderTime)+ " " + std::to_string(frameTime)).c_str());
-    //SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
+
     Objs->DrawObjects(renderer);
-    DrawCircle(renderer, {1000,500}, 500);
+    DrawCircle(renderer, {1000,500}, 500, 255, 255, 255);
 
     /* put the newly-cleared rendering on the screen. */
     frameTime = SDL_GetTicks() - currentTicks;
@@ -177,7 +174,8 @@ void AddObjects(float speed) {
     
     obj->CalculatePosition(0.02);
     Objs->objects.push_back(obj);
-    Objs->UpdateGrid();
+    obj->r = ran(rng) % 256; obj->g = ran(rng) % 256; obj->b = ran(rng) % 256;
+    //Objs->UpdateGrid();
 
     if (!direction)
         angle += 4.0f * (M_PI/180.0f);
@@ -291,58 +289,12 @@ void VerletObjects::SimulateObjects(float dt) {
 }
 
 void VerletObjects::DrawObjects(SDL_Renderer* renderer) {
-    long long totalSize = 0;
     for (auto& obj: objects) {
-        totalSize += roundUpToMultipleOfEight( obj->radius * 8 * 35 / 49 );
+        DrawCircle(renderer, obj->position, obj->radius, obj->r, obj->g, obj->b);
     }
-    SDL_FPoint points[totalSize];
-    int       drawCount = 0;
-    
-    for (auto& obj : objects) {
-        SDL_FPoint center = obj->position;
-        const int32_t diameter = (obj->radius * 2);
-
-        int32_t x = (obj->radius - 1);
-        int32_t y = 0;
-        int32_t tx = 1;
-        int32_t ty = 1;
-        int32_t error = (tx - diameter);
-        
-        while( x >= y )
-        {
-            // Each of the following renders an octant of the circle
-            points[drawCount+0] = { center.x + x, center.y - y };
-            points[drawCount+1] = { center.x + x, center.y + y };
-            points[drawCount+2] = { center.x - x, center.y - y };
-            points[drawCount+3] = { center.x - x, center.y + y };
-            points[drawCount+4] = { center.x + y, center.y - x };
-            points[drawCount+5] = { center.x + y, center.y + x };
-            points[drawCount+6] = { center.x - y, center.y - x };
-            points[drawCount+7] = { center.x - y, center.y + x };
-
-            drawCount += 8;
-
-            if( error <= 0 )
-            {
-                ++y;
-                error += ty;
-                ty += 2;
-            }
-
-            if( error > 0 )
-            {
-                --x;
-                tx += 2;
-                error += (tx - diameter);
-            }
-        }
-    }
-    //SDL_Log("Total Arr Size: %lli", totalSize);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE); //Yellow Color 
-    SDL_RenderPoints(renderer, points, drawCount);
 }
 
-void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
+void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius, Uint8 r = 255, Uint8 g = 255, Uint8 b = 0){
     // 35 / 49 is a slightly biased approximation of 1/sqrt(2)
     const int arrSize = roundUpToMultipleOfEight( radius * 8 * 35 / 49 );
     SDL_FPoint points[arrSize];
@@ -384,5 +336,7 @@ void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius){
             error += (tx - diameter);
         }
     }
+
+    SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE); //Yellow Color 
     SDL_RenderPoints( renderer, points, drawCount);
 }
