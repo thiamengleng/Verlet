@@ -8,8 +8,8 @@ cmake --build build
 ```
 ---
 ## Project Description
-Really bad project that uses O(n^2) collision detection and SDL3 to render everything.
-Handles about 500 objects with about 50FPS
+Really bad project that uses spatial grid for collision detection and SDL3 to render everything.
+Handles about 500 objects with about 60FPS (pls help)
 ---
 | Keybind   | Description       |
 | ------------- |:-------------:| 
