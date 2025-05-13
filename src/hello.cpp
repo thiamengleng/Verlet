@@ -34,6 +34,8 @@ struct VerletObject {
 struct VerletObjects {
     std::vector<std::vector<std::vector<VerletObject*>>> grid;
     std::vector<VerletObject*> objects;
+    SDL_FPoint points[];
+
     void SimulateObjects(float dt);
     void SolveCollisions();
     void UpdateGrid();
@@ -65,7 +67,7 @@ uint64_t frameTime;
 
 void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius);
 void AddObjects(float speed);
-void chatgpt();
+void set_pixel(SDL_Surface *surface, int x, int y, Uint32 color);
 int roundUpToMultipleOfEight(int v);
 
 /* This function runs once at startup. */
@@ -128,7 +130,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
     static uint64_t currentTicks;
-	SDL_FRect rect;
+	static SDL_FRect rect;
 	float red = 0.2, green = 0.3, blue=0.6;
 	rect.y = 0;
     rect.x = 0;
@@ -146,8 +148,6 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     SDL_RenderClear(renderer);
 	
     SDL_SetRenderDrawColorFloat(renderer, 0.2, 0.2, blue, SDL_ALPHA_OPAQUE_FLOAT);  /* new color, full alpha. */
-	SDL_RenderFillRect(renderer, &rect);
-	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
     //SDL_RenderDebugText(renderer, 200, 300, (std::to_string(renderTime)+ " " + std::to_string(frameTime)).c_str());
     //SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
@@ -195,6 +195,7 @@ void AddObjects(float speed) {
 int roundUpToMultipleOfEight(int v) {
     return (v + (8 - 1)) & -8;
 }
+
 void VerletObject::CalculatePosition(float dt) {
     SDL_FPoint newCurrent;
     newCurrent.x = 2 * position.x - previousPosition.x + acceleration.x * dt * dt;
