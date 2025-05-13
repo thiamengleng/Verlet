@@ -21,7 +21,8 @@ struct VerletObject {
     void SimulateGravity(float dt);
     void CalculatePosition(float dt);
     void ApplyConstraint(SDL_FPoint center, float radius);
-    
+    int GetGrid();
+
     VerletObject(float x, float y, float r) : radius(r) {
         position.x = x;
         position.y = y;
@@ -31,10 +32,20 @@ struct VerletObject {
 } typedef VerletObject;
 
 struct VerletObjects {
+    std::vector<std::vector<std::vector<VerletObject*>>> grid;
     std::vector<VerletObject*> objects;
     void SimulateObjects(float dt);
     void SolveCollisions();
+    void UpdateGrid();
+    void ExploreAndSolve(VerletObject* obj);
+    void SolveCollision(VerletObject* first, VerletObject* second);
     void DrawObjects(SDL_Renderer* renderer);
+    VerletObjects() {
+        grid.resize(10);
+        for (auto& row : grid) {
+            row.resize(10);
+        }
+    }
     ~VerletObjects() {
         for (VerletObject*& obj: objects) {
             delete(obj);
@@ -47,6 +58,8 @@ static SDL_Renderer *renderer = NULL;
 static VerletObjects* Objs = new VerletObjects();
 bool pause = false;
 bool step = false;
+
+uint64_t frameTime;
 
 
 
@@ -88,20 +101,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     if (event->type == SDL_EVENT_KEY_DOWN) {
         SDL_Keycode key = event->key.key;
         switch(key) {
-            case SDLK_W:
-                if (SDL_GetTicks() - last > 2) {
-                    float radius = 400.0f;
-                    float r = radius * std::sqrt(distRadius(rng));
-                    //std::shared_ptr<VerletObject> obj = std::make_shared<VerletObject>(1200, 180,;
-                    VerletObject* obj = new VerletObject(1200, 180, SDL_clamp(ran(rng), 10, SDL_clamp(ran(rng)%19, 9, 15)));
-                    obj->acceleration = {(float)SDL_clamp(ran(rng), 0, 250)-4200,(float)SDL_clamp(ran(rng), 1220, 1500)};
-                    obj->CalculatePosition(0.02);
-                    Objs->objects.push_back(obj);
-
-                    
-                    last = SDL_GetTicks();
-                    break;
-                }
             case SDLK_F:
                 if (SDL_GetTicks()-last > 50) {
                     AddObjects(1.0f);
@@ -114,6 +113,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
             case SDLK_S:
                 step = true;    
                 break;
+            case SDLK_C:
+                SDL_Log("Object Count: %d\t Frame Time: %dms", static_cast<int>(Objs->objects.size()), static_cast<int>(frameTime));
         }
     }
 
@@ -126,7 +127,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 SDL_AppResult SDL_AppIterate(void *appstate)
 {
-    static uint64_t currentTicks, frameTime;
+    static uint64_t currentTicks;
 	SDL_FRect rect;
 	float red = 0.2, green = 0.3, blue=0.6;
 	rect.y = 0;
@@ -148,7 +149,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 	SDL_RenderFillRect(renderer, &rect);
 	
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, SDL_ALPHA_OPAQUE);  /* yellow, full alpha */
-    SDL_RenderDebugText(renderer, 200, 300, (std::to_string(frameTime)+ " " + std::to_string(Objs->objects.size())).c_str());
+    //SDL_RenderDebugText(renderer, 200, 300, (std::to_string(renderTime)+ " " + std::to_string(frameTime)).c_str());
     //SDL_RenderDebugText(renderer, 200, 400, std::to_string(Objs->objects.size()).c_str());
     Objs->DrawObjects(renderer);
     DrawCircle(renderer, {1000,500}, 500);
@@ -158,7 +159,8 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     currentTicks = SDL_GetTicks();
     
     SDL_RenderPresent(renderer);
-    SDL_Delay(2);
+    if (frameTime < 2) 
+        SDL_Delay(2);
     return SDL_APP_CONTINUE;  /* carry on with the program! */
 }
 
@@ -178,6 +180,7 @@ void AddObjects(float speed) {
     
     obj->CalculatePosition(0.02);
     Objs->objects.push_back(obj);
+    Objs->UpdateGrid();
 
     if (!direction)
         angle += 4.0f * (M_PI/180.0f);
@@ -220,28 +223,65 @@ void VerletObject::ApplyConstraint(SDL_FPoint center, float cRadius) {
     }
 }
 
-void VerletObjects::SolveCollisions() {
-    for (int i = 0; i < objects.size(); i++) {
-        for (int j = i+1; j < objects.size(); j++) {
-            //std::shared_ptr<VerletObject> first = objects[i], second = objects[j];
-            VerletObject *first = objects[i], *second = objects[j];
-            SDL_FPoint delta = minus(first->position, second->position);
-            float distance = magnitude(delta);
-            if (distance < 0.01f) {
-                delta = {1.0f, 1.0f};
-                distance = 0.01f;
-            }
-            if (distance < first->radius + second->radius) {
-                SDL_FPoint normal = {delta.x / distance, delta.y / distance};
-                
-                float unresolved = first->radius + second->radius - distance;
-                SDL_FPoint addus = {static_cast<float>(0.5*unresolved*normal.x), static_cast<float>(0.5*unresolved*normal.y)};
-                first->position = add(first->position, addus);
-                second->position = minus(second->position, addus);
+int VerletObject::GetGrid() {
+    int row = position.y / 108 + 1, column = position.x / 192;
+    
+    return row*10 + column;
+}
+
+void VerletObjects::ExploreAndSolve(VerletObject* obj) {
+    int row = obj->GetGrid() / 10 - 1, column = obj->GetGrid() % 10;
+
+    for (int i = SDL_max(0, row - 1); i <= SDL_min(9,row + 1); i++) {
+        for (int j = SDL_max(0, column - 1); j <= SDL_min(9,column + 1); j++) {
+            for (auto& other : grid[i][j]) {
+                SolveCollision(obj, other); 
             }
         }
     }
+}
+
+void VerletObjects::SolveCollision(VerletObject* first, VerletObject* second) {
+    SDL_FPoint delta = minus(first->position, second->position);
+    float distance = magnitude(delta);
+        if (distance < 0.01f) {
+            delta = {1.0f, 1.0f};
+            distance = 0.01f;
+        }
+        if (distance < first->radius + second->radius) {
+            float unresolved = first->radius + second->radius - distance;
+            SDL_FPoint addus = {static_cast<float>(0.5*unresolved*(delta.x/distance)), static_cast<float>(0.5*unresolved*(delta.y/distance))};
+            first->position = add(first->position, addus);
+            second->position = minus(second->position, addus);
+        }
+}
+
+void VerletObjects::SolveCollisions() {
+    for (int i = 0; i < objects.size(); i++) {
+        /*
+        for (int j = i+1; j < objects.size(); j++) {
+            //SolveCollision(objects[i], objects[j]);
+        }
+            */
+        ExploreAndSolve(objects[i]);
+    }
     return;
+}
+
+void VerletObjects::UpdateGrid() {
+    for (auto& row : grid) {
+        for (auto& cell : row) {
+            //SDL_Log("woorking");
+            cell.clear(); 
+        }
+    }
+    for (auto& obj : objects) {
+        int row = obj->GetGrid() / 10 - 1, column = obj->GetGrid() % 10;
+        if (row < 0 || row >= 10 || column < 0 || column >= 10) {
+            SDL_Log("Invalid grid access: row=%d, col=%d, pos=(%.2f, %.2f)", row, column, obj->position.x, obj->position.y);
+        }
+        grid[row][column].push_back(obj);
+    }
 }
 
 void VerletObjects::SimulateObjects(float dt) {
@@ -252,6 +292,7 @@ void VerletObjects::SimulateObjects(float dt) {
             obj->ApplyConstraint({1000,500},500);
             obj->CalculatePosition(subdt);
         }
+        UpdateGrid();
         SolveCollisions();
     }
 }
