@@ -8,7 +8,10 @@
 #include <vector>
 #include <chrono>
 #include <random>
-#include "Vec2Math.h"
+#include "Vmath.cpp"
+#include "render.cpp"
+
+
 
 #define MAX_SLICES 24
 #define M_PI 3.14159265358979323846
@@ -18,7 +21,7 @@ struct VerletObject {
     SDL_FPoint position;
     SDL_FPoint previousPosition;
     SDL_FPoint acceleration;
-    Uint8 r, g, b;
+    float r, g, b;
 
     void SimulateGravity(float dt);
     void CalculatePosition(float dt);
@@ -56,12 +59,16 @@ struct VerletObjects {
     }
 } typedef VerletObjects;
 
+
 static SDL_Window *window = NULL;
 static SDL_Renderer *renderer = NULL;
 static VerletObjects* Objs = new VerletObjects();
 
 std::mt19937 rng;
 std::uniform_int_distribution<int> ran(0, 20000);
+std::uniform_real_distribution<float> color(0.3, 1.0);
+
+
 
 bool pause = false;
 bool step = false;
@@ -70,16 +77,13 @@ uint64_t frameTime;
 
 
 void AddObjects(float speed);
-void DrawCircle(SDL_Renderer* renderer, SDL_FPoint, int radius, Uint8 r, Uint8 g, Uint8 b);
-int roundUpToMultipleOfEight(int v);
 
 /* This function runs once at startup. */
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
 {
     SDL_SetAppMetadata("VerletIntegration", "1.0", "com.example.renderer-clear");
-    //static std::shared_ptr<VerletObject> aa = std::make_shared<VerletObject>(1000, 400, static_cast<float>(20));
     VerletObject* aa = new VerletObject(1000, 400, 20.0f);
-    aa->r = 255; aa->g = 255; aa->g = 255;
+    aa->r = 1.0f; aa->g = 1.0f; aa->g = 1.0f;
     Objs->objects.push_back(aa);
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -109,7 +113,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         switch(key) {
             case SDLK_F:
                 if (SDL_GetTicks()-last > 50) {
-                    AddObjects(1.0f);
+                    AddObjects(1.2f);
                     last = SDL_GetTicks();
                 }
                 break;
@@ -144,6 +148,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 
 	SDL_SetRenderDrawColor(renderer, 33, 33, 33, SDL_ALPHA_OPAQUE);  /* dark gray, full alpha */
     SDL_RenderClear(renderer);
+    SDL_FColor whit = {1.0, 1.0, 1.0, 1.0};
 
     Objs->DrawObjects(renderer);
     DrawCircle(renderer, {1000,500}, 500, 255, 255, 255);
@@ -165,31 +170,27 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 }
 
 void AddObjects(float speed) {
-    static float angle = 0;
+    static float angle = 0.3;
     static bool direction = false;
 
-    VerletObject* obj = new VerletObject(1000,250,15);
+    VerletObject* obj = new VerletObject(1000,250,SDL_clamp(ran(rng)%25, 4, 25));
     obj->acceleration.x = std::cos(angle) * 2000;
     obj->acceleration.y = std::sin(angle) * 2000;
     
-    obj->CalculatePosition(0.02);
+    obj->CalculatePosition(0.03);
     Objs->objects.push_back(obj);
-    obj->r = ran(rng) % 256; obj->g = ran(rng) % 256; obj->b = ran(rng) % 256;
-    //Objs->UpdateGrid();
+    obj->r = color(rng); obj->g = color(rng); obj->b = color(rng);
 
     if (!direction)
         angle += 4.0f * (M_PI/180.0f);
     else
         angle -= 4.0f * (M_PI/180.0f);
-    if (angle > (M_PI))
+    if (angle > M_PI - 0.3)
         direction = true; 
-    else if (angle < 0) 
+    else if (angle < 0.3) 
         direction = false;
 }
 
-int roundUpToMultipleOfEight(int v) {
-    return (v + (8 - 1)) & -8;
-}
 
 void VerletObject::CalculatePosition(float dt) {
     SDL_FPoint newCurrent;
@@ -289,54 +290,8 @@ void VerletObjects::SimulateObjects(float dt) {
 }
 
 void VerletObjects::DrawObjects(SDL_Renderer* renderer) {
+    
     for (auto& obj: objects) {
-        DrawCircle(renderer, obj->position, obj->radius, obj->r, obj->g, obj->b);
+        RenderCircle(renderer, obj->position.x, obj->position.y, obj->radius, 24, {obj->r, obj->g, obj->b, 1.0});
     }
-}
-
-void DrawCircle(SDL_Renderer* renderer, SDL_FPoint center, int radius, Uint8 r = 255, Uint8 g = 255, Uint8 b = 0){
-    // 35 / 49 is a slightly biased approximation of 1/sqrt(2)
-    const int arrSize = roundUpToMultipleOfEight( radius * 8 * 35 / 49 );
-    SDL_FPoint points[arrSize];
-    int       drawCount = 0;
-    
-    const int32_t diameter = (radius * 2);
-
-    int32_t x = (radius - 1);
-    int32_t y = 0;
-    int32_t tx = 1;
-    int32_t ty = 1;
-    int32_t error = (tx - diameter);
-    
-    while( x >= y )
-    {
-        // Each of the following renders an octant of the circle
-        points[drawCount+0] = { center.x + x, center.y - y };
-        points[drawCount+1] = { center.x + x, center.y + y };
-        points[drawCount+2] = { center.x - x, center.y - y };
-        points[drawCount+3] = { center.x - x, center.y + y };
-        points[drawCount+4] = { center.x + y, center.y - x };
-        points[drawCount+5] = { center.x + y, center.y + x };
-        points[drawCount+6] = { center.x - y, center.y - x };
-        points[drawCount+7] = { center.x - y, center.y + x };
-
-        drawCount += 8;
-
-        if( error <= 0 )
-        {
-            ++y;
-            error += ty;
-            ty += 2;
-        }
-
-        if( error > 0 )
-        {
-            --x;
-            tx += 2;
-            error += (tx - diameter);
-        }
-    }
-
-    SDL_SetRenderDrawColor(renderer, r, g, b, SDL_ALPHA_OPAQUE); //Yellow Color 
-    SDL_RenderPoints( renderer, points, drawCount);
 }
