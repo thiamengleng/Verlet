@@ -18,3 +18,5 @@ add_executable(${PROJECT_NAME} src/main.cpp)
 
 # Link to the actual SDL3 library.
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3::SDL3)
+
+target_compile_options(${PROJECT_NAME} PUBLIC "-O3")
