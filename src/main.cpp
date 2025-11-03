@@ -66,7 +66,7 @@ static VerletObjects* Objs = new VerletObjects();
 
 std::mt19937 rng;
 std::uniform_int_distribution<int> ran(0, 20000);
-std::uniform_real_distribution<float> color(0.3, 1.0);
+std::uniform_real_distribution<float> color(0.6, 1.0);
 
 
 
@@ -112,8 +112,8 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         SDL_Keycode key = event->key.key;
         switch(key) {
             case SDLK_F:
-                if (SDL_GetTicks()-last > 50) {
-                    AddObjects(1.2f);
+                if (SDL_GetTicks()-last > 2) {
+                    AddObjects(1.8f);
                     last = SDL_GetTicks();
                 }
                 break;
@@ -173,7 +173,7 @@ void AddObjects(float speed) {
     static float angle = 0.3;
     static bool direction = false;
 
-    VerletObject* obj = new VerletObject(1000,250,SDL_clamp(ran(rng)%25, 4, 25));
+    VerletObject* obj = new VerletObject(1000,250,SDL_clamp(ran(rng)%12, 4, 12));
     obj->acceleration.x = std::cos(angle) * 2000;
     obj->acceleration.y = std::sin(angle) * 2000;
     
@@ -199,6 +199,7 @@ void VerletObject::CalculatePosition(float dt) {
     
     previousPosition.y = position.y;
     previousPosition.x = position.x;
+    //Update Positions
     position.x = newCurrent.x;
     position.y = newCurrent.y;
     acceleration = (SDL_FPoint){0, 0};
