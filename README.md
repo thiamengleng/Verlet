@@ -1,5 +1,8 @@
 # Building the project
-
+### NOTE: You need GCC or CLANG to compile or replace target_compile_options flag with something that suits your C++ compiler 
+```
+git pull github.com/thiaengleng/Verlet.git --recursive && cd ./Verlet
+```
 ```
 cmake -S . -B build
 ```
